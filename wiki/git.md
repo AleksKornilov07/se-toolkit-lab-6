@@ -22,6 +22,8 @@
   - [Configure `user.name`](#configure-username)
   - [Configure `user.email`](#configure-useremail)
 
+<!-- TODO improve docs -->
+
 ## What is `Git`
 
 `Git` is a distributed version control system that tracks changes in your files and lets multiple people collaborate on the same codebase. It records a history of every change, so you can revert mistakes, compare versions, and work on features in parallel using branches.

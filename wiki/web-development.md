@@ -122,6 +122,8 @@ Example:
 
 ## API
 
+<!-- TODO move to separate doc -->
+
 An API (`Application Programming Interface`) is a set of rules that lets programs communicate with each other.
 
 A web API exposes [endpoints](#endpoint) that clients can call over `HTTP`.
