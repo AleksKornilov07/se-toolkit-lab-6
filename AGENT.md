@@ -1,45 +1,17 @@
-# Agent
+## Tools
 
-## Overview
+The agent uses two tools:
 
-This project implements a simple CLI LLM agent.
+### list_files
+Lists files in the repository.
 
-The agent receives a question from the command line, sends it to an LLM, and outputs a structured JSON response.
+### read_file
+Reads documentation files.
 
-## Architecture
+## Agentic loop
 
-User question
-↓
-agent.py
-↓
-OpenAI-compatible API
-↓
-LLM response
-↓
-JSON output
-
-## LLM Provider
-
-Provider: Qwen Code API  
-Model: qwen3-coder-plus
-
-Reason:
-- OpenAI-compatible
-- Free usage tier
-- Works without a credit card
-
-## Environment Configuration
-
-Credentials are stored in:
-
-.env.agent.secret
-
-Variables:
-
-LLM_API_KEY  
-LLM_API_BASE  
-LLM_MODEL  
-
-## Running the agent
-
-Example:
+1. Send question to LLM
+2. LLM decides tool calls
+3. Execute tools
+4. Feed results back to LLM
+5. Repeat until final answer

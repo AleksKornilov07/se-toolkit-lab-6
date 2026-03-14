@@ -1,61 +1,178 @@
 import sys
 import json
 import os
-import time
+from pathlib import Path
 from openai import OpenAI
 from dotenv import load_dotenv
 
-# Load agent environment
 load_dotenv(".env.agent.secret")
 
 API_KEY = os.getenv("LLM_API_KEY")
 API_BASE = os.getenv("LLM_API_BASE")
 MODEL = os.getenv("LLM_MODEL")
 
-if not API_KEY or not API_BASE or not MODEL:
-    print("Missing LLM configuration", file=sys.stderr)
-    sys.exit(1)
-
 client = OpenAI(
     api_key=API_KEY,
-    base_url=API_BASE,
+    base_url=API_BASE
 )
 
+PROJECT_ROOT = Path.cwd()
+
+tool_calls_log = []
+
+
+def safe_path(path):
+    p = (PROJECT_ROOT / path).resolve()
+    if not str(p).startswith(str(PROJECT_ROOT)):
+        raise Exception("Access outside project directory")
+    return p
+
+
+def list_files(path):
+    try:
+        p = safe_path(path)
+
+        if not p.exists():
+            return "Path does not exist"
+
+        entries = os.listdir(p)
+        return "\n".join(entries)
+
+    except Exception as e:
+        return str(e)
+
+
+def read_file(path):
+    try:
+        p = safe_path(path)
+
+        if not p.exists():
+            return "File does not exist"
+
+        return p.read_text()
+
+    except Exception as e:
+        return str(e)
+
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "list_files",
+            "description": "List files in a directory",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"}
+                },
+                "required": ["path"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_file",
+            "description": "Read file content",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string"}
+                },
+                "required": ["path"]
+            }
+        }
+    }
+]
+
+
+def execute_tool(name, args):
+
+    if name == "list_files":
+        result = list_files(**args)
+
+    elif name == "read_file":
+        result = read_file(**args)
+
+    else:
+        result = "Unknown tool"
+
+    tool_calls_log.append({
+        "tool": name,
+        "args": args,
+        "result": result
+    })
+
+    return result
+
+
 def main():
+
     if len(sys.argv) < 2:
         print("Usage: agent.py \"question\"", file=sys.stderr)
         sys.exit(1)
 
     question = sys.argv[1]
 
-    start = time.time()
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are a documentation agent. "
+                "Use list_files to explore the wiki folder. "
+                "Use read_file to read documentation. "
+                "Return the final answer and the source reference."
+            )
+        },
+        {"role": "user", "content": question}
+    ]
 
-    try:
+    tool_count = 0
+
+    while tool_count < 10:
+
         response = client.chat.completions.create(
             model=MODEL,
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": question},
-            ],
-            timeout=60,
+            messages=messages,
+            tools=tools
         )
 
-        answer = response.choices[0].message.content.strip()
+        msg = response.choices[0].message
 
-        output = {
-            "answer": answer,
-            "tool_calls": []
-        }
+        if msg.tool_calls:
 
-        print(json.dumps(output))
+            messages.append(msg)
 
-    except Exception as e:
-        print(f"LLM error: {e}", file=sys.stderr)
-        sys.exit(1)
+            for call in msg.tool_calls:
 
-    if time.time() - start > 60:
-        print("Timeout exceeded", file=sys.stderr)
-        sys.exit(1)
+                name = call.function.name
+                args = json.loads(call.function.arguments)
+
+                result = execute_tool(name, args)
+
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": call.id,
+                    "content": result
+                })
+
+                tool_count += 1
+
+            continue
+
+        else:
+            answer = msg.content
+
+            output = {
+                "answer": answer,
+                "source": "unknown",
+                "tool_calls": tool_calls_log
+            }
+
+            print(json.dumps(output))
+
+            return
 
 
 if __name__ == "__main__":
